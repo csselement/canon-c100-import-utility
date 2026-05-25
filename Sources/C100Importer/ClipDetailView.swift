@@ -18,6 +18,7 @@ struct ClipDetailView: View {
                     player = AVPlayer(url: clip.sourceURL)
                 }
                 .onChange(of: clip.id) {
+                    releasePlayer()
                     player = AVPlayer(url: clip.sourceURL)
                 }
 
@@ -56,6 +57,7 @@ struct ClipDetailView: View {
         }
         .onDisappear {
             removePlaybackKeyMonitor()
+            releasePlayer()
         }
     }
 
@@ -126,6 +128,12 @@ struct ClipDetailView: View {
 
         let targetSeconds = max(currentSeconds + seconds, 0)
         player.seek(to: CMTime(seconds: targetSeconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    private func releasePlayer() {
+        player?.pause()
+        player?.replaceCurrentItem(with: nil)
+        player = nil
     }
 
     private func isDedicatedPlaybackEvent(_ event: NSEvent) -> Bool {

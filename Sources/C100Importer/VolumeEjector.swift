@@ -26,13 +26,31 @@ enum VolumeEjectorError: LocalizedError {
         }
 
         let status = DADissenterGetStatus(dissenter)
-        let statusText = DADissenterGetStatusString(dissenter) as String? ?? "Unknown error"
+        let statusText = DADissenterGetStatusString(dissenter) as String? ?? fallbackMessage(for: status)
         return "\(statusText) (\(status))."
+    }
+
+    private static func fallbackMessage(for status: DAReturn) -> String {
+        switch status {
+        case DAReturn(kDAReturnBusy):
+            return "The volume is busy. Another process still has a file open on the SD card."
+        case DAReturn(kDAReturnNotPermitted):
+            return "The unmount request was not permitted."
+        case DAReturn(kDAReturnNotPrivileged):
+            return "The unmount request needs additional privileges."
+        case DAReturn(kDAReturnUnsupported):
+            return "The card was unmounted, but this reader does not support a separate eject operation."
+        case 49168:
+            return "The volume is busy. A file is still open on the SD card."
+        default:
+            return "Unknown error"
+        }
     }
 }
 
 struct VolumeEjector {
     func eject(volumeURL: URL) async throws {
+        let volumePath = volumeURL.path
         let fileURL = volumeURL as CFURL
         guard let session = DASessionCreate(kCFAllocatorDefault) else {
             throw VolumeEjectorError.sessionUnavailable
@@ -42,7 +60,7 @@ struct VolumeEjector {
         }
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            let unmountContext = ContinuationBox(continuation: continuation, session: session)
+            let unmountContext = ContinuationBox(continuation: continuation, session: session, volumePath: volumePath)
             DASessionScheduleWithRunLoop(session, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
             DADiskUnmount(disk, DADiskUnmountOptions(kDADiskUnmountOptionDefault), { disk, dissenter, context in
                 let box = Unmanaged<ContinuationBox>
@@ -62,7 +80,11 @@ struct VolumeEjector {
                     DASessionUnscheduleFromRunLoop(box.session, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
 
                     if let dissenter {
-                        box.continuation.resume(throwing: VolumeEjectorError.ejectFailed(dissenter))
+                        if !Self.isMounted(volumePath: box.volumePath) {
+                            box.continuation.resume()
+                        } else {
+                            box.continuation.resume(throwing: VolumeEjectorError.ejectFailed(dissenter))
+                        }
                     } else {
                         box.continuation.resume()
                     }
@@ -70,14 +92,25 @@ struct VolumeEjector {
             }, Unmanaged.passRetained(unmountContext).toOpaque())
         }
     }
+
+    private static func isMounted(volumePath: String) -> Bool {
+        let mountedVolumeURLs = FileManager.default.mountedVolumeURLs(
+            includingResourceValuesForKeys: nil,
+            options: [.skipHiddenVolumes]
+        ) ?? []
+
+        return mountedVolumeURLs.contains { $0.path == volumePath }
+    }
 }
 
 private final class ContinuationBox {
     let continuation: CheckedContinuation<Void, Error>
     let session: DASession
+    let volumePath: String
 
-    init(continuation: CheckedContinuation<Void, Error>, session: DASession) {
+    init(continuation: CheckedContinuation<Void, Error>, session: DASession, volumePath: String) {
         self.continuation = continuation
         self.session = session
+        self.volumePath = volumePath
     }
 }

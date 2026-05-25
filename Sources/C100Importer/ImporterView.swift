@@ -80,8 +80,7 @@ struct ImporterView: View {
     private var importControls: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(viewModel.progressText)
-                    .lineLimit(2)
+                StatusText(text: viewModel.progressText, kind: viewModel.statusKind)
                 Spacer()
                 Button {
                     viewModel.importSelectedClips()
@@ -157,6 +156,25 @@ struct ImporterView: View {
 
     private func isDedicatedArrowEvent(_ event: NSEvent) -> Bool {
         event.modifierFlags.intersection([.command, .shift, .option, .control]).isEmpty
+    }
+}
+
+private struct StatusText: View {
+    let text: String
+    let kind: ImportStatusKind
+
+    var body: some View {
+        HStack(spacing: 7) {
+            if kind == .success {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.green)
+                    .accessibilityLabel("Success")
+            }
+
+            Text(text)
+                .lineLimit(2)
+        }
     }
 }
 

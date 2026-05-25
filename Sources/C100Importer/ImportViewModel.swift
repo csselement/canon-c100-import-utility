@@ -1,7 +1,13 @@
 import AVFoundation
+import AppKit
 import C100ImportCore
 import Foundation
 import SwiftUI
+
+enum ImportStatusKind {
+    case normal
+    case success
+}
 
 @MainActor
 final class ImportViewModel: ObservableObject {
@@ -13,10 +19,12 @@ final class ImportViewModel: ObservableObject {
     @Published var isImporting = false
     @Published var isEjecting = false
     @Published var progressText = "Ready"
+    @Published var statusKind: ImportStatusKind = .normal
     @Published var errorMessage: String?
     @Published var importResults: [ImportResult] = []
 
     private let scanner = C100CardScanner()
+    private var mountObserver: NSObjectProtocol?
 
     var selectedClip: C100Clip? {
         clips.first { selectedClipIDs.contains($0.id) } ?? clips.first
@@ -36,10 +44,17 @@ final class ImportViewModel: ObservableObject {
     }
 
     init() {
+        installVolumeMountObserver()
         let canonVolume = URL(fileURLWithPath: "/Volumes/CANON", isDirectory: true)
         if FileManager.default.fileExists(atPath: canonVolume.path) {
             sourceURL = canonVolume
             scanSource()
+        }
+    }
+
+    deinit {
+        if let mountObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(mountObserver)
         }
     }
 
@@ -86,6 +101,7 @@ final class ImportViewModel: ObservableObject {
 
         isImporting = true
         progressText = "Preparing import..."
+        statusKind = .normal
         errorMessage = nil
         importResults = []
         let selectedIDs = selectedClipIDs
@@ -134,19 +150,23 @@ final class ImportViewModel: ObservableObject {
         isEjecting = true
         errorMessage = nil
         progressText = "Ejecting SD card..."
+        statusKind = .normal
+        clips = []
+        plans = []
+        selectedClipIDs = []
+        importResults = []
 
         Task {
             do {
+                try await Task.sleep(for: .milliseconds(300))
                 try await VolumeEjector().eject(volumeURL: sourceURL)
                 self.sourceURL = nil
-                self.clips = []
-                self.plans = []
-                self.selectedClipIDs = []
-                self.importResults = []
                 self.progressText = "SD card ejected"
+                self.statusKind = .success
                 self.isEjecting = false
             } catch {
                 self.progressText = "Eject failed"
+                self.statusKind = .normal
                 self.errorMessage = error.localizedDescription
                 self.isEjecting = false
             }
@@ -181,5 +201,45 @@ final class ImportViewModel: ObservableObject {
         let fallbackIndex = offset > 0 ? -1 : clips.count
         let nextIndex = min(max((currentIndex ?? fallbackIndex) + offset, 0), clips.count - 1)
         selectedClipIDs = [clips[nextIndex].id]
+    }
+
+    private func installVolumeMountObserver() {
+        mountObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didMountNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self,
+                  let url = notification.userInfo?[NSWorkspace.volumeURLUserInfoKey] as? URL else {
+                return
+            }
+
+            Task { @MainActor in
+                self.autoDetectMountedCard(at: url)
+            }
+        }
+    }
+
+    private func autoDetectMountedCard(at url: URL) {
+        guard !isImporting, !isEjecting else {
+            return
+        }
+
+        do {
+            let detectedClips = try scanner.scan(root: url)
+            guard !detectedClips.isEmpty else {
+                return
+            }
+
+            sourceURL = url
+            clips = detectedClips
+            selectedClipIDs = detectedClips.first.map { [$0.id] } ?? []
+            errorMessage = nil
+            progressText = "Detected \(detectedClips.count) C100 clips on \(url.lastPathComponent)"
+            statusKind = .normal
+            rebuildPlans()
+        } catch {
+            return
+        }
     }
 }
