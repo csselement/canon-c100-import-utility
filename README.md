@@ -12,6 +12,7 @@ Reference: [Canon Community discussion about the discontinued C100 Data Import U
 
 - Detects a mounted `/Volumes/CANON` SD card when present.
 - Supports manual source and download-folder pickers.
+- Ejects the selected SD-card volume from inside the app.
 - Scans the Canon C100 AVCHD layout:
 
 ```text

@@ -11,6 +11,7 @@ final class ImportViewModel: ObservableObject {
     @Published var plans: [ImportPlan] = []
     @Published var selectedClipIDs: Set<C100Clip.ID> = []
     @Published var isImporting = false
+    @Published var isEjecting = false
     @Published var progressText = "Ready"
     @Published var errorMessage: String?
     @Published var importResults: [ImportResult] = []
@@ -23,6 +24,10 @@ final class ImportViewModel: ObservableObject {
 
     var canImport: Bool {
         !plans.isEmpty && destinationURL != nil && !isImporting
+    }
+
+    var canEjectSource: Bool {
+        sourceURL != nil && !isImporting && !isEjecting
     }
 
     var importButtonTitle: String {
@@ -119,6 +124,33 @@ final class ImportViewModel: ObservableObject {
 
     func selectNextClip() {
         moveSelection(offset: 1)
+    }
+
+    func ejectSourceCard() {
+        guard let sourceURL else {
+            return
+        }
+
+        isEjecting = true
+        errorMessage = nil
+        progressText = "Ejecting SD card..."
+
+        Task {
+            do {
+                try await VolumeEjector().eject(volumeURL: sourceURL)
+                self.sourceURL = nil
+                self.clips = []
+                self.plans = []
+                self.selectedClipIDs = []
+                self.importResults = []
+                self.progressText = "SD card ejected"
+                self.isEjecting = false
+            } catch {
+                self.progressText = "Eject failed"
+                self.errorMessage = error.localizedDescription
+                self.isEjecting = false
+            }
+        }
     }
 
     private func rebuildPlans() {

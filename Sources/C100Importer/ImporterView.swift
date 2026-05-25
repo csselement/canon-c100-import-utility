@@ -43,7 +43,9 @@ struct ImporterView: View {
                     placeholder: "Choose SD card",
                     primaryActionTitle: "Choose",
                     primaryAction: viewModel.chooseSource,
-                    secondaryAction: viewModel.scanSource
+                    secondaryAction: viewModel.scanSource,
+                    ejectAction: viewModel.ejectSourceCard,
+                    isEjectEnabled: viewModel.canEjectSource
                 )
 
                 SourcePickerRow(
@@ -193,6 +195,8 @@ private struct SourcePickerRow: View {
     let primaryActionTitle: String
     let primaryAction: () -> Void
     var secondaryAction: (() -> Void)?
+    var ejectAction: (() -> Void)?
+    var isEjectEnabled = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -216,6 +220,17 @@ private struct SourcePickerRow: View {
                     }
                     .controlSize(.small)
                     .help("Rescan source")
+                }
+
+                if let ejectAction {
+                    Button {
+                        ejectAction()
+                    } label: {
+                        Image(systemName: "eject")
+                    }
+                    .controlSize(.small)
+                    .disabled(!isEjectEnabled)
+                    .help("Eject SD card")
                 }
             }
 
