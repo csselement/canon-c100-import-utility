@@ -6,7 +6,7 @@ Canon previously offered a Data Import Utility for the C100-era workflow, but th
 
 Reference: [Canon Community discussion about the discontinued C100 Data Import Utility](https://community.usa.canon.com/t5/Professional-Video/Canon-s-Data-Import-Utility-C100/td-p/70953)
 
-![Canon C100 Import Utility screenshot](Resources/Screenshots/canon-c100-import-utility.png)
+![Canon C100 Import Utility screenshot](Resources/Screenshots/canon-c100-import-utility-2026-05-25.png)
 
 ## Features
 
