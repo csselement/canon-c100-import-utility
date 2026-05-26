@@ -64,15 +64,27 @@ struct ImporterView: View {
     }
 
     private var clipList: some View {
-        List(selection: $viewModel.selectedClipIDs) {
-            ForEach(viewModel.clips) { clip in
-                ClipRow(clip: clip)
-                    .tag(clip.id)
+        ScrollViewReader { proxy in
+            List(selection: $viewModel.selectedClipIDs) {
+                ForEach(viewModel.clips) { clip in
+                    ClipRow(clip: clip)
+                        .id(clip.id)
+                        .tag(clip.id)
+                }
             }
-        }
-        .overlay {
-            if viewModel.clips.isEmpty {
-                ContentUnavailableView("No C100 Clips", systemImage: "video.slash", description: Text("Choose a card with PRIVATE/AVCHD/BDMV/STREAM."))
+            .overlay {
+                if viewModel.clips.isEmpty {
+                    ContentUnavailableView("No C100 Clips", systemImage: "video.slash", description: Text("Choose a card with PRIVATE/AVCHD/BDMV/STREAM."))
+                }
+            }
+            .onChange(of: viewModel.selectedClip?.id) { _, selectedClipID in
+                guard let selectedClipID else {
+                    return
+                }
+
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    proxy.scrollTo(selectedClipID, anchor: .center)
+                }
             }
         }
     }
